@@ -1,0 +1,637 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// Player Entity
+// ========================================
+model Player {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String
+  avatar        String?
+  
+  // Statistics
+  gamesPlayed   Int      @default(0)
+  gamesWon      Int      @default(0)
+  totalPlayTime Int      @default(0) // in seconds
+  
+  // Psychology tracking
+  revengeTargets Json?   // revenge target list
+  lastPlayedAt  DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  nations       Nation[]
+  gameRooms     GameRoomPlayer[]
+  achievements  PlayerAchievement[]
+  hostedRooms   GameRoom[] @relation("HostedRooms")
+  
+  @@index([username])
+  @@index([email])
+}
+
+// ========================================
+// Game Room Entity
+// ========================================
+model GameRoom {
+  id           String   @id @default(uuid())
+  roomCode     String   @unique  // 6-digit room code
+  name         String
+  hostId       String
+  
+  // Room configuration
+  minPlayers   Int      @default(4)
+  maxPlayers   Int      @default(6)
+  gameMode     GameMode @default(STANDARD)
+  victoryThreshold Float @default(0.8) // 70-90%
+  mapSize      MapSize  @default(MEDIUM)
+  
+  // Status
+  status       RoomStatus @default(WAITING)
+  currentTurn  Int        @default(0)
+  gameSpeed    Float      @default(1.0)
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  
+  host         Player @relation("HostedRooms", fields: [hostId], references: [id], onDelete: Cascade)
+  players      GameRoomPlayer[]
+  nations      Nation[]
+  territories  Territory[]
+  gameState    GameState?
+  events       GameEvent[]
+  
+  @@index([roomCode])
+  @@index([status])
+  @@index([hostId])
+}
+
+enum GameMode {
+  LIGHTNING  // 30-45 minutes
+  STANDARD   // 1-2 hours
+  EPIC       // 3-4 hours+
+}
+
+enum MapSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum RoomStatus {
+  WAITING
+  STARTING
+  IN_PROGRESS
+  PAUSED
+  FINISHED
+}
+
+// ========================================
+// Game Room Player (Join Table)
+// ========================================
+model GameRoomPlayer {
+  id         String   @id @default(uuid())
+  gameRoomId String
+  playerId   String
+  
+  joinedAt   DateTime @default(now())
+  isReady    Boolean  @default(false)
+  leftAt     DateTime?
+  
+  gameRoom   GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  
+  @@unique([gameRoomId, playerId])
+  @@index([gameRoomId])
+  @@index([playerId])
+}
+
+// ========================================
+// Nation Entity
+// ========================================
+model Nation {
+  id           String   @id @default(uuid())
+  gameRoomId   String
+  playerId     String
+  
+  // Basic information
+  name         String
+  flagColor    String
+  ideology     Ideology
+  governmentType GovernmentType
+  
+  // Starting setup (asymmetric)
+  startingWealth  StartingWealth
+  startingTech    Int        // tech level 1-10
+  startingPopulation BigInt
+  startingTerritory  Int     // initial territory count
+  
+  // Current state
+  resources    Json       // Resources object
+  stability    Float      // 0-100
+  cohesion     Float      // cohesion 0-100
+  population   BigInt
+  
+  // Geography
+  capitalId    String?
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Policies
+  policies     Json       // current policy configuration
+  capital      Territory? @relation("NationCapital", fields: [capitalId], references: [id], onDelete: SetNull)
+  
+  player       Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  gameRoom     GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  territories  Territory[]
+  units        MilitaryUnit[]
+  generals     General[]
+  technologies TechProgress[]
+  buildings    Building[]
+  diplomaticRelationsFrom DiplomaticRelation[] @relation("DiplomaticRelationFrom")
+  diplomaticRelationsTo   DiplomaticRelation[] @relation("DiplomaticRelationTo")
+  targetedEvents GameEvent[] @relation("NationTargetedEvents")
+  
+  @@unique([gameRoomId, playerId])
+  @@index([gameRoomId])
+  @@index([playerId])
+  @@index([capitalId])
+}
+
+enum Ideology {
+  LIBERAL_DEMOCRACY    // Liberal democracy
+  AUTHORITARIANISM     // Authoritarianism
+  COMMUNISM            // Communism
+  FASCISM              // Fascism
+  RELIGIOUS_THEOCRACY  // Religious theocracy
+}
+
+enum GovernmentType {
+  DEMOCRACY
+  DICTATORSHIP
+  MILITARY_JUNTA
+  MONARCHY
+  THEOCRACY
+}
+
+enum StartingWealth {
+  EXTREME_POVERTY  // Extreme poverty
+  POOR             // Poor
+  DEVELOPING       // Developing
+  MODERATE         // Moderate
+  WEALTHY          // Wealthy
+  SUPER_RICH       // Super rich
+}
+
+// ========================================
+// Territory Entity
+// ========================================
+model Territory {
+  id          String   @id @default(uuid())
+  nationId    String?  // null means neutral
+  gameRoomId  String
+  
+  // Geographic information
+  name        String
+  type        TerrainType
+  x           Float    // map coordinates
+  y           Float
+  size        Float    // area affects resource production
+  
+  // Resource production
+  resourceProduction Json  // Resources type
+  
+  // Special attributes
+  hasPort     Boolean @default(false)
+  isCapital   Boolean @default(false)
+  isStrategic Boolean @default(false) // strategic location
+  
+  // Infrastructure
+  infrastructureLevel Int @default(1) // 1-10
+  
+  // Buildings
+  buildings   Building[]
+  
+  // Military
+  units       MilitaryUnit[]
+  
+  // Capital relation
+  capitalOf   Nation? @relation("NationCapital")
+  
+  nation      Nation? @relation(fields: [nationId], references: [id], onDelete: SetNull)
+  gameRoom    GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  
+  @@index([nationId])
+  @@index([gameRoomId])
+  @@index([x, y])
+}
+
+enum TerrainType {
+  PLAINS
+  MOUNTAINS
+  FOREST
+  DESERT
+  SWAMP
+  TUNDRA
+  COASTAL
+  ISLAND
+}
+
+// ========================================
+// Building Entity
+// ========================================
+model Building {
+  id          String   @id @default(uuid())
+  territoryId String
+  nationId    String
+  
+  type        BuildingType
+  level       Int      @default(1)
+  
+  constructionProgress Float @default(0) // 0-100
+  isActive    Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+  
+  territory   Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  nation      Nation @relation(fields: [nationId], references: [id], onDelete: Cascade)
+  
+  @@index([territoryId])
+  @@index([nationId])
+}
+
+enum BuildingType {
+  FACTORY
+  FARM
+  MINE
+  POWER_PLANT
+  RESEARCH_LAB
+  MILITARY_BASE
+  AIRPORT
+  NAVAL_BASE
+  FORT
+  HOSPITAL
+  SCHOOL
+  PROPAGANDA_CENTER
+}
+
+// ========================================
+// Technology System
+// ========================================
+model TechDefinition {
+  id          String   @id
+  name        String
+  nameZh      String
+  description String
+  category    TechCategory
+  tier        Int      // tech tier 1-10
+  prerequisites String[] // prerequisite tech ID array
+  
+  // Research cost
+  researchCost Int
+  researchTime Int     // base research time (turns)
+  
+  // Effects
+  effects     Json     // tech effect configuration
+  
+  @@index([category])
+  @@index([tier])
+}
+
+enum TechCategory {
+  MILITARY_INFANTRY
+  MILITARY_ARMOR
+  MILITARY_NAVAL
+  MILITARY_AIR
+  MILITARY_NUCLEAR
+  INDUSTRIAL
+  AGRICULTURAL
+  CIVIL_MEDICAL
+  CIVIL_EDUCATION
+  CIVIL_TRANSPORT
+  CIVIL_COMMUNICATION
+  IDEOLOGY
+}
+
+// Technology progress (per nation)
+model TechProgress {
+  id          String   @id @default(uuid())
+  nationId    String
+  techId      String   // corresponds to TechDefinition.id
+  
+  status      TechStatus
+  progress    Float    @default(0) // 0-100
+  startedAt   DateTime?
+  completedAt DateTime?
+  
+  // Research method
+  researchMethod ResearchMethod @default(NORMAL)
+  
+  nation      Nation @relation(fields: [nationId], references: [id], onDelete: Cascade)
+  
+  @@unique([nationId, techId])
+  @@index([nationId])
+  @@index([status])
+}
+
+enum TechStatus {
+  LOCKED       // Locked (prerequisites not completed)
+  AVAILABLE    // Available for research
+  RESEARCHING  // Researching
+  COMPLETED    // Completed
+}
+
+enum ResearchMethod {
+  NORMAL           // Normal research
+  ESPIONAGE        // Espionage theft
+  REVERSE_ENGINEER // Reverse engineering
+  FOREIGN_EXPERT   // Foreign expert assistance
+}
+
+// ========================================
+// Military Unit Entity
+// ========================================
+model MilitaryUnit {
+  id          String   @id @default(uuid())
+  nationId    String
+  territoryId String?
+  
+  // Unit information
+  type        UnitType
+  name        String   // custom name (e.g., "1st Armored Division")
+  quantity    Int      // troop count
+  
+  // Attributes
+  experience  Int      @default(0) // experience affects combat power
+  morale      Float    @default(100) // morale 0-100
+  strength    Float    @default(100) // combat power 0-100
+  
+  // Position and status
+  status      UnitStatus @default(IDLE)
+  movement    Float    @default(0) // remaining movement points
+  
+  // Commander
+  generalId   String?
+  
+  // Supply
+  supply      Float    @default(100) // supply 0-100
+  
+  createdAt   DateTime @default(now())
+  
+  nation      Nation @relation(fields: [nationId], references: [id], onDelete: Cascade)
+  territory   Territory? @relation(fields: [territoryId], references: [id], onDelete: SetNull)
+  general     General? @relation(fields: [generalId], references: [id], onDelete: SetNull)
+  
+  @@index([nationId])
+  @@index([territoryId])
+  @@index([type])
+}
+
+enum UnitType {
+  // Infantry
+  MILITIA
+  INFANTRY
+  ELITE_INFANTRY
+  SPECIAL_FORCES
+  
+  // Artillery
+  ARTILLERY
+  ROCKET_ARTILLERY
+  
+  // Armor
+  LIGHT_TANK
+  MEDIUM_TANK
+  HEAVY_TANK
+  MODERN_TANK
+  
+  // Air force
+  FIGHTER
+  BOMBER
+  JET_FIGHTER
+  STRATEGIC_BOMBER
+  
+  // Navy
+  DESTROYER
+  CRUISER
+  BATTLESHIP
+  CARRIER
+  SUBMARINE
+  
+  // Special
+  GUERRILLA      // Guerrilla
+  NUCLEAR_MISSILE // Nuclear missile
+}
+
+enum UnitStatus {
+  IDLE
+  MOVING
+  ATTACKING
+  DEFENDING
+  RETREATING
+  RESUPPLYING
+}
+
+// ========================================
+// General Entity
+// ========================================
+model General {
+  id          String   @id @default(uuid())
+  nationId    String
+  
+  name        String
+  portrait    String?
+  
+  // Attributes
+  attack      Int      // 1-10
+  defense     Int      // 1-10
+  planning    Int      // planning ability 1-10
+  logistics   Int      // logistics ability 1-10
+  
+  // Traits
+  traits      String[] // trait ID array
+  
+  // Status
+  isAlive     Boolean  @default(true)
+  loyalty     Int      @default(100) // loyalty 0-100
+  
+  createdAt   DateTime @default(now())
+  
+  nation      Nation @relation(fields: [nationId], references: [id], onDelete: Cascade)
+  units       MilitaryUnit[]
+  
+  @@index([nationId])
+  @@index([isAlive])
+}
+
+// ========================================
+// Diplomatic Relation Entity
+// ========================================
+model DiplomaticRelation {
+  id          String   @id @default(uuid())
+  
+  nationId    String   // initiating party
+  targetNationId String // target nation
+  
+  // Relationship value
+  relationValue Int    @default(0) // -100 to 100
+  status      DiplomaticStatus @default(NEUTRAL)
+  
+  // Agreements
+  tradeAgreement Boolean @default(false)
+  militaryAlliance Boolean @default(false)
+  nonAggressionPact Boolean @default(false)
+  
+  // Modifiers
+  modifiers   Json     // relationship modifier list
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  nation      Nation @relation("DiplomaticRelationFrom", fields: [nationId], references: [id], onDelete: Cascade)
+  targetNation Nation @relation("DiplomaticRelationTo", fields: [targetNationId], references: [id], onDelete: Cascade)
+  
+  @@unique([nationId, targetNationId])
+  @@index([nationId])
+  @@index([targetNationId])
+}
+
+enum DiplomaticStatus {
+  AT_WAR       // War
+  HOSTILE      // Hostile
+  COLD         // Cold
+  NEUTRAL      // Neutral
+  FRIENDLY     // Friendly
+  ALLIED       // Allied
+}
+
+// ========================================
+// Game Event Entity
+// ========================================
+model GameEvent {
+  id          String   @id @default(uuid())
+  gameRoomId  String
+  
+  // Event information
+  type        EventType
+  category    EventCategory
+  title       String
+  description String
+  
+  // Target
+  targetNationId String?
+  
+  // Options and results
+  options     Json     // options array
+  chosenOption String?
+  consequences Json?   // consequences
+  
+  // Time
+  triggeredAt DateTime @default(now())
+  expiresAt   DateTime? // FOMO mechanism: time-limited event
+  resolvedAt  DateTime?
+  
+  gameRoom    GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  targetNation Nation? @relation("NationTargetedEvents", fields: [targetNationId], references: [id], onDelete: SetNull)
+  
+  @@index([gameRoomId])
+  @@index([type])
+  @@index([triggeredAt])
+  @@index([targetNationId])
+}
+
+enum EventType {
+  RANDOM          // Random event
+  MILESTONE       // Milestone event
+  TRIGGERED       // Condition-triggered event
+  PLAYER_DECISION // Player decision event
+}
+
+enum EventCategory {
+  NATURAL_DISASTER
+  ECONOMIC_CRISIS
+  TECH_BREAKTHROUGH
+  POLITICAL
+  MILITARY
+  DIPLOMATIC
+  SOCIAL
+}
+
+// ========================================
+// Achievement System
+// ========================================
+model Achievement {
+  id          String   @id
+  name        String
+  nameZh      String
+  description String
+  icon        String
+  rarity      AchievementRarity
+  
+  // Unlock condition (can be checked by code)
+  condition   Json
+  
+  players     PlayerAchievement[]
+}
+
+enum AchievementRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model PlayerAchievement {
+  id            String   @id @default(uuid())
+  playerId      String
+  achievementId String
+  
+  unlockedAt    DateTime @default(now())
+  
+  player        Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  @@unique([playerId, achievementId])
+  @@index([playerId])
+  @@index([achievementId])
+}
+
+// ========================================
+// Game State Snapshot
+// ========================================
+model GameState {
+  id          String   @id @default(uuid())
+  gameRoomId  String   @unique
+  
+  // Complete game state (for save/load)
+  stateData   Json     // serialized JSON containing all game data
+  
+  // Metadata
+  turn        Int
+  phase       GamePhase
+  savedAt     DateTime @default(now())
+  
+  gameRoom    GameRoom @relation(fields: [gameRoomId], references: [id], onDelete: Cascade)
+  
+  @@index([savedAt])
+}
+
+enum GamePhase {
+  ECONOMY      // Economy phase
+  DIPLOMACY    // Diplomacy phase
+  MILITARY     // Military phase
+  TECH         // Tech research phase
+  EVENTS       // Event handling phase
+}
