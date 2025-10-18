@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "baseUrl": ".",
+    "paths": {
+      "@nestjs/common": ["packages/backend/src/stubs/nest-common"],
+      "@nestjs/jwt": ["packages/backend/src/stubs/nest-jwt"],
+      "@nestjs/schedule": ["packages/backend/src/stubs/nest-schedule"],
+      "@nestjs/event-emitter": ["packages/backend/src/stubs/nest-event-emitter"],
+      "@/common/*": ["packages/backend/src/common/*"],
+      "@/modules/*": ["packages/backend/src/modules/*"]
+    },
+    "outDir": "dist"
+  },
+  "include": ["packages/backend/src/**/*.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
