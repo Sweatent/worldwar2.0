@@ -1,0 +1,9 @@
+{
+  "name": "grand-strategy-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/backend",
+    "packages/shared"
+  ]
+}

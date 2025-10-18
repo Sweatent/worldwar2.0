@@ -1,0 +1,38 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+coverage/
+.eslintcache
+
+# Prisma (exclude migrations folder from gitignore)
+# packages/backend/prisma/migrations/
+
+# Environment
+.env
+*.env
+packages/backend/.env
+packages/backend/.env.*
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Misc
+.tmp/
+.temp/
