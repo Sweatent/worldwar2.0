@@ -1,0 +1,22 @@
+# Dependencies
+node_modules
+pnpm-lock.yaml
+
+# Build outputs
+coverage
+dist
+build
+*.log
+
+# Environments
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Misc
+.DS_Store
+.idea
+.vscode
+.husky/_

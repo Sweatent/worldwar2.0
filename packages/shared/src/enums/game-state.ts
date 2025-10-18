@@ -1,0 +1,14 @@
+export enum GameState {
+  LOBBY = 'LOBBY',
+  STARTING = 'STARTING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  PAUSED = 'PAUSED',
+  FINISHED = 'FINISHED',
+}
+
+export enum PlayerState {
+  IDLE = 'IDLE',
+  ACTIVE = 'ACTIVE',
+  DISCONNECTED = 'DISCONNECTED',
+  ELIMINATED = 'ELIMINATED',
+}
